@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
-import cron from "node-cron";
 
 dotenv.config();
 
@@ -11,7 +10,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔹 Inicializa Firebase Admin
+// 🔹 Inicializa Firebase con la variable de entorno segura
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
 
 admin.initializeApp({
@@ -21,18 +20,24 @@ admin.initializeApp({
 const db = admin.firestore();
 
 // ==================================================
-// 🔸 Enviar notificación inmediata
+// 🔹 Endpoint de prueba
+// ==================================================
+app.get("/", (req, res) => res.send("Servidor de notificaciones corriendo correctamente"));
+
+// ==================================================
+// 🔹 Enviar notificación inmediata
 // ==================================================
 app.post("/send", async (req, res) => {
   try {
     const { token, title, body, data } = req.body;
+
     const message = {
       notification: { title, body },
-      data: data || {},
       token,
+      data: data || {},
       webpush: {
         fcmOptions: {
-          link: data?.link || "/", // para abrir tu app al hacer clic
+          link: data?.link || "/",
         },
         notification: {
           actions: [
@@ -45,15 +50,15 @@ app.post("/send", async (req, res) => {
 
     const response = await admin.messaging().send(message);
     console.log("✅ Notificación enviada:", response);
-    res.status(200).send({ success: true, response });
+    res.json({ success: true, response });
   } catch (error) {
-    console.error("❌ Error enviando mensaje:", error);
-    res.status(500).send({ success: false, error: error.message });
+    console.error("❌ Error enviando notificación:", error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ==================================================
-// 🔸 Programar recordatorio 30 min antes de la cita
+// 🔹 Programar recordatorio 30 min antes de la cita
 // ==================================================
 app.post("/programar-recordatorio", async (req, res) => {
   try {
@@ -104,7 +109,7 @@ app.post("/programar-recordatorio", async (req, res) => {
 });
 
 // ==================================================
-// 🔸 Endpoint para recibir respuesta del usuario
+// 🔹 Endpoint para recibir respuesta del usuario
 // ==================================================
 app.post("/respuesta-cita", async (req, res) => {
   try {
@@ -139,5 +144,8 @@ app.post("/respuesta-cita", async (req, res) => {
   }
 });
 
+// ==================================================
+// 🔹 Inicio del servidor
+// ==================================================
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`🚀 Servidor de notificaciones corriendo en puerto ${PORT}`));
