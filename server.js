@@ -17,18 +17,25 @@ let serviceAccount;
 
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    // Usar variable de entorno en Render o prod
+    // ✅ Usar variable de entorno en Render o producción
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+
+    // 🔹 Corregir saltos de línea de la private_key
     if (serviceAccount.private_key) {
       serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
     }
+
     console.log("✅ Firebase inicializado desde variable de entorno");
   } else {
-    // Usar archivo local serviceAccountKey.json en desarrollo local
+    // ✅ Usar archivo local serviceAccountKey.json en desarrollo
     const serviceAccountPath = path.join(process.cwd(), "serviceAccountKey.json");
+
     if (!fs.existsSync(serviceAccountPath)) {
-      throw new Error("No se encontró serviceAccountKey.json ni variable de entorno FIREBASE_SERVICE_ACCOUNT_KEY");
+      throw new Error(
+        "No se encontró serviceAccountKey.json ni variable de entorno FIREBASE_SERVICE_ACCOUNT_KEY"
+      );
     }
+
     serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf-8"));
     console.log("✅ Firebase inicializado desde archivo local serviceAccountKey.json");
   }
@@ -36,7 +43,6 @@ try {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
-
 } catch (err) {
   console.error("❌ ERROR inicializando Firebase:", err);
   process.exit(1);
