@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
 
@@ -10,12 +12,35 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔹 Inicializa Firebase con la variable de entorno segura
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+// 🔹 Inicializa Firebase detectando variable de entorno o archivo local
+let serviceAccount;
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    // Usar variable de entorno en Render o prod
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+    }
+    console.log("✅ Firebase inicializado desde variable de entorno");
+  } else {
+    // Usar archivo local serviceAccountKey.json en desarrollo local
+    const serviceAccountPath = path.join(process.cwd(), "serviceAccountKey.json");
+    if (!fs.existsSync(serviceAccountPath)) {
+      throw new Error("No se encontró serviceAccountKey.json ni variable de entorno FIREBASE_SERVICE_ACCOUNT_KEY");
+    }
+    serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf-8"));
+    console.log("✅ Firebase inicializado desde archivo local serviceAccountKey.json");
+  }
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+
+} catch (err) {
+  console.error("❌ ERROR inicializando Firebase:", err);
+  process.exit(1);
+}
 
 const db = admin.firestore();
 
@@ -36,9 +61,7 @@ app.post("/send", async (req, res) => {
       token,
       data: data || {},
       webpush: {
-        fcmOptions: {
-          link: data?.link || "/",
-        },
+        fcmOptions: { link: data?.link || "/" },
         notification: {
           actions: [
             { action: "confirmar", title: "✅ Confirmar" },
@@ -115,7 +138,6 @@ app.post("/respuesta-cita", async (req, res) => {
   try {
     const { citaId, userId, medicoId, respuesta } = req.body;
 
-    // Guardamos la respuesta en Firestore
     await db.collection("respuestas_citas").doc(citaId).set({
       userId,
       medicoId,
@@ -123,7 +145,6 @@ app.post("/respuesta-cita", async (req, res) => {
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Notificamos al médico
     const medicoDoc = await db.collection("medicos").doc(medicoId).get();
     const medicoToken = medicoDoc.data()?.token;
 
@@ -148,4 +169,4 @@ app.post("/respuesta-cita", async (req, res) => {
 // 🔹 Inicio del servidor
 // ==================================================
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`🚀 Servidor de notificaciones corriendo en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
